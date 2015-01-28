@@ -16,6 +16,7 @@ namespace LabelSwitchingRouter
         internal int RCPortNumber { get; private set; }
         internal int nodeID { get; private set; }
         private int a;
+        private int timeout = 15000;
         internal CommutationField CF = null;
         internal LRM lrm = null;
         internal Queue<Packet> LSR_FIFO = null;
@@ -80,17 +81,17 @@ namespace LabelSwitchingRouter
             communicationModule.Start();
             servingFIFO.Start();
             broadcast.Start();
-            timer.Start();
+            //timer.Start();
 
             //string register = Keywords.REGISTER.ToString() + " " + nodeID.ToString() + " " + portNumber.ToString();
-            communicationModule.Send(RCPortNumber, Register());
+            //communicationModule.Send(RCPortNumber, Register());
         }
         private void KeepAlive()
         {
             string keepAlive = Keywords.KEEP.ToString() + " " + nodeID.ToString();
             while (true)
             {
-                Thread.Sleep(10000);
+                Thread.Sleep(5000);
                 communicationModule.Send(RCPortNumber, enc.GetBytes(keepAlive));
             }
         }
@@ -98,17 +99,28 @@ namespace LabelSwitchingRouter
 
         private byte[] Register()
         {
-            return enc.GetBytes(Keywords.REGISTER.ToString() + " " + nodeID.ToString() + " " + portNumber.ToString());
+            StringBuilder sb = new StringBuilder();
+            sb.Append(Keywords.REGISTER.ToString()).Append(" ").Append(nodeID).Append(" ").
+                Append(portNumber).Append(" ");
+            foreach (var item in neighbours)
+            {
+                sb.Append(item).Append("#");
+            }
+            sb.Remove(sb.Length - 1, 1);
+            return enc.GetBytes(sb.ToString());
         }
 
         private void Broadcast()
         {
             Random gen = new Random();
-            int miliseconds = gen.Next(5, 15) * 1000;
+            int miliseconds = gen.Next(5, 12) * 1000;
             string msg = Keywords.BROADCAST.ToString() + " " + nodeID;
             byte[] msgBytes = enc.GetBytes(msg);
             Thread.Sleep(miliseconds);
             communicationModule.Send(wiresPortNumber, msgBytes);
+            Thread.Sleep(timeout);
+            communicationModule.Send(RCPortNumber, Register());
+            timer.Start();
         }
         public void ServeFIFO()
         {
