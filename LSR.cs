@@ -26,7 +26,7 @@ namespace LabelSwitchingRouter
         private Thread timer;
         private Thread broadcast;
         private List<string> neighbours = null;
-        
+
 
 
         private bool loadLSRConfiguration(string nID = "0")
@@ -75,7 +75,7 @@ namespace LabelSwitchingRouter
             timer.IsBackground = true;
             broadcast = new Thread(Broadcast);
             broadcast.IsBackground = true;
-            
+
 
             communicationModule.Start();
             servingFIFO.Start();
@@ -96,7 +96,7 @@ namespace LabelSwitchingRouter
         }
 
 
-        private byte[] Register() 
+        private byte[] Register()
         {
             return enc.GetBytes(Keywords.REGISTER.ToString() + " " + nodeID.ToString() + " " + portNumber.ToString());
         }
@@ -163,7 +163,7 @@ namespace LabelSwitchingRouter
             Console.WriteLine("Serve: " + keyword.ToString());
             switch (keyword)
             {
-                case Keywords.PACKET:  
+                case Keywords.PACKET:
                     Packet _packet = new Packet(cmdString);
                     LSR_FIFO.Enqueue(_packet);
                     break;
@@ -171,7 +171,7 @@ namespace LabelSwitchingRouter
                     ServeSetRequest(cmdString);
                     break;
                 case Keywords.DELETE:
-                    ServeDeleteRequest(cmdString); 
+                    ServeDeleteRequest(cmdString);
                     break;
                 case Keywords.BROADCAST:
                     ServeBroadcast(cmdString);
@@ -192,17 +192,17 @@ namespace LabelSwitchingRouter
         private void ServeReserve(string cmd)
         {
             string[] array = cmd.Split(delimiters[0]);
-            if(bool.Parse(array[3]))
+            if (bool.Parse(array[3]))
             {
                 string message = Keywords.CCRESPONSE.ToString() + " " + nodeID + " ";
                 // string message = Keywords.CCRESPONSE.ToString() + " " + array[1] + " ";
-                if(lrm.Reserve(true, array[1], int.Parse(array[2])))
+                if (lrm.Reserve(true, array[1], int.Parse(array[2])))
                 {
                     message += "YES";
                 }
                 else
                     message += "NO";
-                communicationModule.Send(RCPortNumber, enc.GetBytes(message);
+                communicationModule.Send(RCPortNumber, enc.GetBytes(message));
             }
             else
                 lrm.Reserve(false, array[1], int.Parse(array[2]));
@@ -225,7 +225,7 @@ namespace LabelSwitchingRouter
             //    sb.Append(item).Append("#");
             //}
             //sb.Remove(sb.Length-1, 1);
-            communicationModule.Send(RCPortNumber, enc.GetBytes(sb.ToString());
+            communicationModule.Send(RCPortNumber, enc.GetBytes(sb.ToString()));
             return;
         }
 
@@ -243,12 +243,12 @@ namespace LabelSwitchingRouter
             return;
         }
 
-       
+
 
         internal void ServeDeleteRequest(string cmd)
         {
             string[] array = cmd.Split(delimiters[0]);
-            if(CF.deleteInEntry(int.Parse(array[1]), array[2]))
+            if (CF.deleteInEntry(int.Parse(array[1]), array[2]))
             {
                 Console.WriteLine("DELETE obsłużone pomyślnie");
             }
@@ -268,7 +268,7 @@ namespace LabelSwitchingRouter
         //    IP,
 
         //}
-
+    }
         public enum Keywords
         {
             BROADCAST,
@@ -283,4 +283,5 @@ namespace LabelSwitchingRouter
             REGISTER,
             DEFAULT
         }
-}
+ }
+

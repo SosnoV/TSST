@@ -127,26 +127,26 @@ namespace LabelSwitchingRouter
         }
 
         
-        internal string GetInEntry(int inI, string inL) 
-        {
-            LabelSwitchingTableEntry entry = null;
-            try
-            {
-                //Console.WriteLine(inI + "|" + inL + "|");
-                entry = findRow(inI, inL);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e.Message);
-                return null;
-            }
-            StringBuilder sb = new StringBuilder();
-            sb.Append(GETSETKeywords.INTAB.ToString()).Append(space).Append(entry.InInterface).Append(space);
-            if(!inL.Equals(" "))
-                sb.Append(entry.InLabel).Append(space);
-            sb.Append(entry.OutInterface).Append(space).Append(entry.OutLabel);
-            return sb.ToString();
-        }
+        //internal string GetInEntry(int inI, string inL) 
+        //{
+        //    LabelSwitchingTableEntry entry = null;
+        //    try
+        //    {
+        //        //Console.WriteLine(inI + "|" + inL + "|");
+        //        entry = findRow(inI, inL);
+        //    }
+        //    catch (Exception e)
+        //    {
+        //        Console.WriteLine(e.Message);
+        //        return null;
+        //    }
+        //    StringBuilder sb = new StringBuilder();
+        //    sb.Append(GETSETKeywords.INTAB.ToString()).Append(space).Append(entry.InInterface).Append(space);
+        //    if(!inL.Equals(" "))
+        //        sb.Append(entry.InLabel).Append(space);
+        //    sb.Append(entry.OutInterface).Append(space).Append(entry.OutLabel);
+        //    return sb.ToString();
+        //}
 
         internal bool deleteInEntry(int inP, string inL) 
         {
