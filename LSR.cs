@@ -15,7 +15,9 @@ namespace LabelSwitchingRouter
         internal int wiresPortNumber { get; private set; }
         internal int RCPortNumber { get; private set; }
         internal int nodeID { get; private set; }
+        private int a;
         internal CommutationField CF = null;
+        internal LRM lrm = null;
         internal Queue<Packet> LSR_FIFO = null;
         private char[] delimiters = { ' ' };
         private UnicodeEncoding enc = new UnicodeEncoding();
@@ -24,7 +26,7 @@ namespace LabelSwitchingRouter
         private Thread timer;
         private Thread broadcast;
         private List<string> neighbours = null;
-
+        
 
 
         private bool loadLSRConfiguration(string nID = "0")
@@ -32,14 +34,15 @@ namespace LabelSwitchingRouter
             //portNumber = CsharpMPLS.Parser.ParseLSRConfiguration(nID);
             //if(portNumber == 0)
             //    return false;
-            int managerPort = 0, wiresPort = 0;
-            portNumber = Parser.ParseConfiguration(nID, out managerPort, out wiresPort);
+            int managerPort = 0, wiresPort = 0, avb = 0;
+            portNumber = Parser.ParseConfiguration(nID, out managerPort, out wiresPort, out avb);
             if (managerPort == 0 || wiresPort == 0 || portNumber == 0)
                 return false;
             else
             {
                 RCPortNumber = managerPort;
                 wiresPortNumber = wiresPort;
+                a = avb;
                 return true;
             }
         }
@@ -57,6 +60,7 @@ namespace LabelSwitchingRouter
             }
             nodeID = int.Parse(id);
             CF = new CommutationField(this);
+            lrm = new LRM(a);
             LSR_FIFO = new Queue<CsharpMPLS.Packet>();
             neighbours = new List<string>();
             communicationModule = new Communication(portNumber, this);
@@ -139,8 +143,10 @@ namespace LabelSwitchingRouter
             cmdString = enc.GetString(command);
             if (cmdString.Contains(Keywords.PACKET.ToString()))
                 return Keywords.PACKET;
-            else if (cmdString.Contains(Keywords.NEIGHBOUR.ToString()))
-                return Keywords.NEIGHBOUR;
+            else if (cmdString.Contains(Keywords.BROADCAST.ToString()))
+                return Keywords.BROADCAST;
+            else if (cmdString.Contains(Keywords.RESERVE.ToString()))
+                return Keywords.RESERVE;
             else if (cmdString.Contains(Keywords.SET.ToString()))
                 return Keywords.SET;
             else if (cmdString.Contains(Keywords.DELETE.ToString()))
@@ -170,6 +176,9 @@ namespace LabelSwitchingRouter
                 case Keywords.BROADCAST:
                     ServeBroadcast(cmdString);
                     break;
+                case Keywords.RESERVE:
+                    ServeReserve(cmdString);
+                    break;
                 default:
                     break;
             }
@@ -178,6 +187,25 @@ namespace LabelSwitchingRouter
                 Console.WriteLine("To send: " + toSend);
                 communicationModule.Send(RCPortNumber, enc.GetBytes(toSend));
             }
+        }
+
+        private void ServeReserve(string cmd)
+        {
+            string[] array = cmd.Split(delimiters[0]);
+            if(bool.Parse(array[3]))
+            {
+                string message = Keywords.CCRESPONSE.ToString() + " " + nodeID + " ";
+                // string message = Keywords.CCRESPONSE.ToString() + " " + array[1] + " ";
+                if(lrm.Reserve(true, array[1], int.Parse(array[2])))
+                {
+                    message += "YES";
+                }
+                else
+                    message += "NO";
+                communicationModule.Send(RCPortNumber, enc.GetBytes(message);
+            }
+            else
+                lrm.Reserve(false, array[1], int.Parse(array[2]));
         }
 
         private void ServeBroadcast(string cmd)
@@ -189,13 +217,14 @@ namespace LabelSwitchingRouter
                     return;
 	        }
             neighbours.Add(array[1]);
+            lrm.AddNeighbourAVB(array[1]);
             StringBuilder sb = new StringBuilder();
-            sb.Append(Keywords.NEIGHBOUR.ToString()).Append(" ");
-            foreach (var item in neighbours)
-	        {
-		        sb.Append(item).Append("#");
-	        }
-            sb.Remove(sb.Length-1, 1);
+            sb.Append(Keywords.NEIGHBOUR.ToString()).Append(" ").Append(array[1]);
+            //foreach (var item in neighbours)
+            //{
+            //    sb.Append(item).Append("#");
+            //}
+            //sb.Remove(sb.Length-1, 1);
             communicationModule.Send(RCPortNumber, enc.GetBytes(sb.ToString());
             return;
         }
@@ -249,6 +278,7 @@ namespace LabelSwitchingRouter
             SET,
             DELETE,
             RESPONSE,
+            CCRESPONSE,
             KEEP,
             REGISTER,
             DEFAULT
