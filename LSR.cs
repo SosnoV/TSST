@@ -13,7 +13,7 @@ namespace LabelSwitchingRouter
     {
         internal int portNumber { get; private set; }
         internal int wiresPortNumber { get; private set; }
-        internal int managerPortNumber { get; private set; }
+        internal int RCPortNumber { get; private set; }
         internal int nodeID { get; private set; }
         internal CommutationField CF = null;
         internal Queue<Packet> LSR_FIFO = null;
@@ -22,14 +22,10 @@ namespace LabelSwitchingRouter
         private Communication communicationModule = null;
         private Thread servingFIFO;
         private Thread timer;
+        private Thread broadcast;
+        private List<string> neighbours = null;
 
-        //dodane:
-        private int maximalBandwithIn;
-        private int maximalBandwithOut;
-        private int interfacesIn = 4;
-        private int interfacesOut = 4;
-        private int[] bandwithIfIn;
-        private int[] bandwithIfOut;
+
 
         private bool loadLSRConfiguration(string nID = "0")
         {
@@ -42,7 +38,7 @@ namespace LabelSwitchingRouter
                 return false;
             else
             {
-                managerPortNumber = managerPort;
+                RCPortNumber = managerPort;
                 wiresPortNumber = wiresPort;
                 return true;
             }
@@ -62,17 +58,8 @@ namespace LabelSwitchingRouter
             nodeID = int.Parse(id);
             CF = new CommutationField(this);
             LSR_FIFO = new Queue<CsharpMPLS.Packet>();
+            neighbours = new List<string>();
             communicationModule = new Communication(portNumber, this);
-            bandwithIfIn = new int[interfacesIn];
-            bandwithIfOut = new int[interfacesOut];
-            for (int i = 0; i < interfacesIn; i++)
-            {
-                bandwithIfIn[i] = 0;
-            }
-            for (int i = 0; i < interfacesOut; i++)
-            {
-                bandwithIfOut[i] = 0;
-            }
             Console.WriteLine("/////////////// LSR NODE NUMBER: " + nodeID + "///////////////");
         }
 
@@ -82,23 +69,43 @@ namespace LabelSwitchingRouter
             servingFIFO.IsBackground = true;
             timer = new Thread(KeepAlive);
             timer.IsBackground = true;
+            broadcast = new Thread(Broadcast);
+            broadcast.IsBackground = true;
+            
+
             communicationModule.Start();
             servingFIFO.Start();
+            broadcast.Start();
             timer.Start();
 
-            string register = Keywords.REGISTER.ToString() + "#" + nodeID.ToString() + "#" + portNumber.ToString();
-            communicationModule.Send(managerPortNumber, enc.GetBytes(register));
+            //string register = Keywords.REGISTER.ToString() + " " + nodeID.ToString() + " " + portNumber.ToString();
+            communicationModule.Send(RCPortNumber, Register());
         }
         private void KeepAlive()
         {
-            string keepAlive = Keywords.KEEPALIVE.ToString() + "#" + nodeID.ToString();
+            string keepAlive = Keywords.KEEP.ToString() + " " + nodeID.ToString();
             while (true)
             {
                 Thread.Sleep(10000);
-                communicationModule.Send(managerPortNumber, enc.GetBytes(keepAlive));
+                communicationModule.Send(RCPortNumber, enc.GetBytes(keepAlive));
             }
         }
 
+
+        private byte[] Register() 
+        {
+            return enc.GetBytes(Keywords.REGISTER.ToString() + " " + nodeID.ToString() + " " + portNumber.ToString());
+        }
+
+        private void Broadcast()
+        {
+            Random gen = new Random();
+            int miliseconds = gen.Next(5, 15) * 1000;
+            string msg = Keywords.BROADCAST.ToString() + " " + nodeID;
+            byte[] msgBytes = enc.GetBytes(msg);
+            Thread.Sleep(miliseconds);
+            communicationModule.Send(wiresPortNumber, msgBytes);
+        }
         public void ServeFIFO()
         {
             while (true)
@@ -132,10 +139,10 @@ namespace LabelSwitchingRouter
             cmdString = enc.GetString(command);
             if (cmdString.Contains(Keywords.PACKET.ToString()))
                 return Keywords.PACKET;
+            else if (cmdString.Contains(Keywords.NEIGHBOUR.ToString()))
+                return Keywords.NEIGHBOUR;
             else if (cmdString.Contains(Keywords.SET.ToString()))
                 return Keywords.SET;
-            else if (cmdString.Contains(Keywords.GET.ToString()))
-                return Keywords.GET;
             else if (cmdString.Contains(Keywords.DELETE.ToString()))
                 return Keywords.DELETE;
             else
@@ -147,24 +154,21 @@ namespace LabelSwitchingRouter
             string cmdString = null;
             string toSend = null;
             Keywords keyword = this.DecisionMethod(command, out cmdString);
+            Console.WriteLine("Serve: " + keyword.ToString());
             switch (keyword)
             {
-                case Keywords.PACKET:
-                    Console.WriteLine("Serve: " + keyword.ToString());
+                case Keywords.PACKET:  
                     Packet _packet = new Packet(cmdString);
                     LSR_FIFO.Enqueue(_packet);
                     break;
-                case Keywords.GET:
-                    Console.WriteLine("Serve: " + keyword.ToString());
-                    toSend = ServeGetRequest(cmdString);
-                    break;
                 case Keywords.SET:
-                    Console.WriteLine("Serve: " + keyword.ToString());
-                    toSend = ServeSetRequest(cmdString);
+                    ServeSetRequest(cmdString);
                     break;
                 case Keywords.DELETE:
-                    Console.WriteLine("Serve: " + keyword.ToString());
-                    toSend = ServeDeleteRequest(cmdString);
+                    ServeDeleteRequest(cmdString); 
+                    break;
+                case Keywords.BROADCAST:
+                    ServeBroadcast(cmdString);
                     break;
                 default:
                     break;
@@ -172,306 +176,80 @@ namespace LabelSwitchingRouter
             if (toSend != null)
             {
                 Console.WriteLine("To send: " + toSend);
-                communicationModule.Send(managerPortNumber, enc.GetBytes(toSend));
+                communicationModule.Send(RCPortNumber, enc.GetBytes(toSend));
             }
         }
 
-        internal string ServeSetRequest(string cmd)
+        private void ServeBroadcast(string cmd)
         {
-            string[] array = cmd.Split(delimiters[0]);
-            //foreach (var item in array)
-            //{
-            //    Console.WriteLine(item + "|");
-            //}
-            if (cmd.Contains(GETSETKeywords.INTAB.ToString()))
-            {
-                if (array.Length == 7)
-                {
-
-                    if ((CF.addInputEntryToInputTable(int.Parse(array[2]), array[3], int.Parse(array[4]), int.Parse(array[5]))) == false)
-                        return null;
-                    Console.WriteLine("added InputTable entry");
-                }
-                else
-                {
-                    if ((CF.addInputEntryToInputTable(int.Parse(array[2]), " ", int.Parse(array[3]), int.Parse(array[4]))) == false)
-                        return null;
-                    Console.WriteLine("added InputTable entry");
-                }
-            }
-            else if (cmd.Contains(GETSETKeywords.OUTTAB.ToString()))
-            {
-                if (bool.Parse(array[4]) == true)//PushTopLabel == true
-                {
-                    if ((CF.addOutputTableEntryToOutputTable(int.Parse(array[2]), int.Parse(array[3]), bool.Parse(array[4]), array[5])) == false)
-                        return null;
-                    Console.WriteLine("added OutputTable entry");
-                }
-                else //PushTopLabel == false
-                {
-                    if ((CF.addOutputTableEntryToOutputTable(int.Parse(array[2]), int.Parse(array[3]), bool.Parse(array[4]))) == false)
-                        return null;
-                    Console.WriteLine("added OutputTable entry");
-                }
-            }
-            else if (cmd.Contains(GETSETKeywords.XC.ToString()))
-            {
-                if ((CF.addXCEntryToXCTable(int.Parse(array[2]), int.Parse(array[3]), int.Parse(array[4]))) == false)
-                    return null;
-                Console.WriteLine("added XCputTable entry");
-            }
-            else if (cmd.Contains(GETSETKeywords.LS.ToString()))
-            {
-                if ((CF.addLabelStackEntryToLabelStackTable(int.Parse(array[2]), array[3])) == false)
-                    return null;
-                Console.WriteLine("added LabelStackTable entry");
-            }
-            else if (cmd.Contains(GETSETKeywords.IP.ToString()))
-            {
-                if ((CF.addIPTableEntryToIPTable(int.Parse(array[2]), int.Parse(array[3]))) == false)
-                    return null;
-                Console.WriteLine("added IPTable entry");
-            }
-            else if (cmd.Contains(GETSETKeywords.IFIN.ToString()))
-            {
-                try
-                {
-                    int index = int.Parse(array[2]) - 1;
-                    bandwithIfIn[index] += int.Parse(array[3]);
-                    Console.WriteLine("Added InputInterface Bandwith. Total: " + bandwithIfIn[index]);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                    return null;
-                }
-            }
-            else if (cmd.Contains(GETSETKeywords.IFOUT.ToString()))
-            {
-                try
-                {
-                    int index = int.Parse(array[2]) - 1;
-                    bandwithIfOut[index] += int.Parse(array[3]);
-                    Console.WriteLine("Added OutputInterface Bandwith. Total: " + bandwithIfOut[index]);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                    return null;
-                }
-            }
-            return ServeGetRequest(cmd);
-        }
-
-        internal string ServeGetRequest(string cmd) //zmienic dla in => rozna dlugosc tablic
-        {
-            string[] array = cmd.Split(delimiters[0]);
-            string toAppend = null;
+ 	        string[] array = cmd.Split(delimiters[0]);
+            foreach (var neigh in neighbours)
+	        {
+		        if(array[1].Equals(neigh))
+                    return;
+	        }
+            neighbours.Add(array[1]);
             StringBuilder sb = new StringBuilder();
-            sb.Append(nodeID).Append(" ").Append(Keywords.RESP.ToString()).Append(" ");
-            if (cmd.Contains(GETSETKeywords.INTAB.ToString()))
-            {
-                try
-                {
-                    if (array.Length == 7)
-                    {
-                        if ((toAppend = CF.GetInEntry(int.Parse(array[2]), array[3])) == null)
-                            throw new Exception();
-                    }
-                    else
-                    {
-                        if ((toAppend = CF.GetInEntry(int.Parse(array[2]), " ")) == null)
-                            throw new Exception();
-                    }
-                    sb.Append(toAppend);
-                }
-                catch (Exception)
-                {
-                    Console.WriteLine("Cannot Get IN");
-                }
-
-            }
-            else if (cmd.Contains(GETSETKeywords.OUTTAB.ToString()))
-            {
-                //sb.Append(CF.GetOutEntry(int.Parse(array[2])));
-                try
-                {
-                    if ((toAppend = CF.GetOutEntry(int.Parse(array[2]))) == null)
-                        throw new Exception();
-                    else
-                        sb.Append(toAppend);
-                }
-                catch (Exception)
-                {
-                    Console.WriteLine("Cannot Get OUT");
-                }
-            }
-            else if (cmd.Contains(GETSETKeywords.XC.ToString()))
-            {
-                //sb.Append(CF.GetXCEntry(int.Parse(array[2])));
-                try
-                {
-                    if ((toAppend = CF.GetXCEntry(int.Parse(array[2]))) == null)
-                        throw new Exception();
-                    else
-                        sb.Append(toAppend);
-                }
-                catch (Exception)
-                {
-                    Console.WriteLine("Cannot Get XC");
-                }
-            }
-            else if (cmd.Contains(GETSETKeywords.LS.ToString()))
-            {
-                //sb.Append(CF.GetLSEntry(int.Parse(array[2])));
-                try
-                {
-                    if ((toAppend = CF.GetLSEntry(int.Parse(array[2]))) == null)
-                        throw new Exception();
-                    else
-                        sb.Append(toAppend);
-                }
-                catch (Exception)
-                {
-                    Console.WriteLine("Cannot Get LS");
-                }
-            }
-            else if (cmd.Contains(GETSETKeywords.IP.ToString()))
-            {
-                //sb.Append(CF.GetIPEntry(int.Parse(array[2])));
-                try
-                {
-                    if ((toAppend = CF.GetIPEntry(int.Parse(array[2]))) == null)
-                        throw new Exception();
-                    else
-                        sb.Append(toAppend);
-                }
-                catch (Exception)
-                {
-                    Console.WriteLine("Cannot Get IP");
-                }
-            }
-            else if (cmd.Contains(GETSETKeywords.IFIN.ToString()))
-            {
-                try
-                {
-                    int index = int.Parse(array[2]) - 1;
-                    //bandwithIfIn[index] += int.Parse(array[3]);
-                    int interfaceIn = index + 1;//to da numer interfejsu
-                    sb.Append(GETSETKeywords.IFIN.ToString()).Append(" ").
-                        Append(interfaceIn).Append(" ").Append(bandwithIfIn[index]);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                    Console.WriteLine("Cannot Get IFIN");
-                }
-            }
-            else if (cmd.Contains(GETSETKeywords.IFOUT.ToString()))
-            {
-                try
-                {
-                    int index = int.Parse(array[2]) - 1;
-                    //bandwithIfOut[index] += int.Parse(array[3]);
-                    int interfaceOut = index + 1;//to da numer interfejsu
-                    sb.Append(GETSETKeywords.IFOUT.ToString()).Append(" ").
-                        Append(interfaceOut).Append(" ").Append(bandwithIfOut[index]);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                    Console.WriteLine("Cannot Get IFOUT");
-                }
-            }
-            return sb.ToString();
+            sb.Append(Keywords.NEIGHBOUR.ToString()).Append(" ");
+            foreach (var item in neighbours)
+	        {
+		        sb.Append(item).Append("#");
+	        }
+            sb.Remove(sb.Length-1, 1);
+            communicationModule.Send(RCPortNumber, enc.GetBytes(sb.ToString());
+            return;
         }
 
-        internal string ServeDeleteRequest(string cmd)
+        internal void ServeSetRequest(string cmd)
         {
             string[] array = cmd.Split(delimiters[0]);
-            int index = int.Parse(array[2]);
-            StringBuilder sb = new StringBuilder();
-            sb.Append(nodeID).Append(" ").Append(Keywords.RESP.ToString()).Append(" ").Append(Keywords.DELETE.ToString()).Append(" ");
-            if (cmd.Contains(GETSETKeywords.INTAB.ToString()))
+            if (CF.addInputEntryToInputTable(int.Parse(array[1]), array[2], int.Parse(array[3]), array[4]))
             {
-                if (CF.deleteInEntry(index, array[3]))
-                    sb.Append(GETSETKeywords.INTAB.ToString()).Append(" ").Append(index).Append(" ").Append(array[3]);
+                Console.WriteLine("SET obsłużone pomyślnie");
             }
-            else if (cmd.Contains(GETSETKeywords.OUTTAB.ToString()))
+            else
             {
-                if (CF.deleteOutputEntry(index))
-                    sb.Append(GETSETKeywords.OUTTAB.ToString()).Append(" ").Append(index);
+                Console.WriteLine("SET nie obsłużone");
             }
-            else if (cmd.Contains(GETSETKeywords.XC.ToString()))
-            {
-                if (CF.deleteXCEntry(index))
-                    sb.Append(GETSETKeywords.XC.ToString()).Append(" ").Append(index);
-            }
-            else if (cmd.Contains(GETSETKeywords.LS.ToString()))
-            {
-                if (CF.deleteLabelStackEntry(index))
-                    sb.Append(GETSETKeywords.LS.ToString()).Append(" ").Append(index);
-            }
-            else if (cmd.Contains(GETSETKeywords.IP.ToString()))
-            {
-                if (CF.deleteIPEntry(index))
-                    sb.Append(GETSETKeywords.IP.ToString()).Append(" ").Append(index);
-            }
-            else if (cmd.Contains(GETSETKeywords.IFIN.ToString()))
-            {
-                try
-                {
-                    index -= 1;
-                    bandwithIfIn[index] -= int.Parse(array[3]);
-                    Console.WriteLine("Deleted InputInterface Bandwith. Total: " + bandwithIfIn[index]);
-                    sb.Append(GETSETKeywords.IFIN.ToString()).Append(" ").Append(++index);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                    return null;
-                }
-            }
-            else if (cmd.Contains(GETSETKeywords.IFOUT.ToString()))
-            {
-                try
-                {
-                    index -= 1;
-                    bandwithIfOut[index] -= int.Parse(array[3]);
-                    Console.WriteLine("Deleted OutputInterface Bandwith. Total: " + bandwithIfOut[index]);
-                    sb.Append(GETSETKeywords.IFOUT.ToString()).Append(" ").Append(++index);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                    return null;
-                }
-            }
-            return sb.ToString();
-           }
+            return;
         }
 
-        public enum GETSETKeywords
+       
+
+        internal void ServeDeleteRequest(string cmd)
         {
-            INTAB,
-            OUTTAB,
-            XC,
-            LS,
-            IP,
-            IFIN,
-            IFOUT
+            string[] array = cmd.Split(delimiters[0]);
+            if(CF.deleteInEntry(int.Parse(array[1]), array[2]))
+            {
+                Console.WriteLine("DELETE obsłużone pomyślnie");
+            }
+            else
+            {
+                Console.WriteLine("DELETE nie obsłużone");
+            }
+            return;
         }
+
+        //public enum GETSETKeywords
+        //{
+        //    INTAB,
+        //    OUTTAB,
+        //    XC,
+        //    LS,
+        //    IP,
+
+        //}
 
         public enum Keywords
         {
+            BROADCAST,
+            NEIGHBOUR,
+            RESERVE,
             PACKET,
-            GET,
             SET,
             DELETE,
-            GETRESP,
-            SETRESP,
-            RESP,
-            KEEPALIVE,
+            RESPONSE,
+            KEEP,
             REGISTER,
             DEFAULT
         }
