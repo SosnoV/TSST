@@ -227,7 +227,7 @@ namespace LabelSwitchingRouter
             nodesToPorts.Add(array[2], int.Parse(array[3]));
             StringBuilder sb = new StringBuilder();
             sb.Append(Keywords.NEIGHBOUR.ToString()).Append(" ").Append(nodeID).Append(" ").Append(array[2]);
-            communicationModule.Send(RCPortNumber, enc.GetBytes(sb.ToString()));
+            communicationModule.Send(wiresPortNumber, enc.GetBytes(sb.ToString()));
             return;
         }
 
