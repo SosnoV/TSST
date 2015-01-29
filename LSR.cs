@@ -12,6 +12,7 @@ namespace LabelSwitchingRouter
         internal int wiresPortNumber { get; private set; }
         internal int RCPortNumber { get; private set; }
         internal int nodeID { get; private set; }
+        private int ASN;
         private int timeout = 20000;
         internal CommutationField CF = null;
         internal LRM lrm = null;
@@ -50,6 +51,7 @@ namespace LabelSwitchingRouter
             {
                 RCPortNumber = managerPort;
                 wiresPortNumber = wiresPort;
+                ASN = RCPortNumber;
                 return true;
             }
         }
@@ -123,7 +125,7 @@ namespace LabelSwitchingRouter
         {
             Random gen = new Random();
             int miliseconds = gen.Next(5, 12) * 1000;
-            string msg = Keywords.BROADCAST.ToString() + " " + nodeID;
+            string msg = Keywords.BROADCAST.ToString() + " " + nodeID + " ";
             byte[] broadcastBytes = enc.GetBytes(msg);
             Thread.Sleep(miliseconds);
             Console.WriteLine("Broadcast send in next line");
@@ -224,9 +226,15 @@ namespace LabelSwitchingRouter
             //array 1 port przysyłajacego
             //array 2 nodeId sąsiada
             //array 3 port do tego sasiada
+            //array 4 ASN sąsiada
             nodesToPorts.Add(array[2], int.Parse(array[3]));
             StringBuilder sb = new StringBuilder();
-            sb.Append(Keywords.NEIGHBOUR.ToString()).Append(" ").Append(nodeID).Append(" ").Append(array[2]);
+            if(array[4].Equals(ASN.ToString()))
+                sb.Append(Keywords.NEIGHBOUR.ToString()).Append(" ").Append(nodeID).Append(" ").Append(array[2]);
+            else
+                sb.Append(Keywords.ENEIGHBOUR.ToString()).Append(" ").Append(nodeID).Append(" ").
+                    Append(array[2]).Append(" ").Append(array[4]);
+            Console.WriteLine("SERVED BRESP, MSG TO RC: " + sb.ToString());
             communicationModule.Send(wiresPortNumber, enc.GetBytes(sb.ToString()));
             return;
         }
@@ -261,7 +269,7 @@ namespace LabelSwitchingRouter
             //array 3 port tego (przyjmujacego
             StringBuilder sb = new StringBuilder();
             sb.Append(Keywords.BRESP.ToString()).Append(" ").Append(array[3]).Append(" ").Append(nodeID).
-                Append(" ").Append(array[2]);
+                Append(" ").Append(array[2]).Append(" ").Append(ASN);
             communicationModule.Send(wiresPortNumber, enc.GetBytes(sb.ToString()));
             return;
         }
@@ -314,6 +322,7 @@ namespace LabelSwitchingRouter
             BROADCAST,
             BRESP,
             NEIGHBOUR,
+            ENEIGHBOUR,
             RESERVE,
             PACKET,
             SET,
