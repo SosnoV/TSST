@@ -16,6 +16,10 @@ namespace CsharpMPLS
             neighboursAvB = Parser.portsAvB(nodeId);
             currentAvB = neighboursAvB;
             Console.WriteLine("LRM created");
+            foreach (var i in neighboursAvB)
+            {
+                Console.WriteLine(" Key {0} Value {1}", i.Key, i.Value);
+            }
         }
 
         internal bool Reserve(bool reserve, int port, double bandwith) 

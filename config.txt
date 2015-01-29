@@ -1,33 +1,33 @@
 ﻿#manager
-tcp_port_manager=10001
+tcp_port_manager=10000
 
 #wires
 tcp_port_wires=10002
 number_of_wires=7
 
-#(nodeID, port, nodeID, port)
-1000,1,0,1
-0,2,1,1
-1,2,3,1
-3,2,2,2
-2,1,1001,1
-3,3,4,1
-4,2,1002,1
+#(nodeID, port, nodeID, port, bandwidth)
+1001,1,1,1,100
+1,2,2,1,50
+2,2,3,1,40
+3,2,4,2,100
+4,1,1002,1,80
+3,3,5,1,40
+5,2,1003,1,50
 
 #network nodes
 #tcp_port_nodes = first_tcp_port_node + node_id
 number_of_nodes=5
 first_node_id=1
-first_tcp_port_node=11001
+first_tcp_port_node=12001
 
-Node1 port=11001 avb=10
-Node2 port=11002 avb=10
-Node3 port=11003 avb=10
-Node4 port=11004 avb=10
-Node5 port=11005 avb=10
+Node1 port=12001
+Node2 port=12002
+Node3 port=12003
+Node4 port=12004
+Node5 port=12005
 
 #clients
 #tcp_port_client = first_tcp_port_client + client_id
 number_of_clients=3
-first_client_id=1000
-first_tcp_port_client=11000
+first_client_id=1001
+first_tcp_port_client=11001

@@ -46,7 +46,10 @@ namespace LabelSwitchingRouter
             int managerPort = 0, wiresPort = 0;
             portNumber = Parser.ParseConfiguration(nID, out managerPort, out wiresPort);
             if (managerPort == 0 || wiresPort == 0 || portNumber == 0)
+            {
+                Console.WriteLine("Error with ports");
                 return false;
+            }
             else
             {
                 RCPortNumber = managerPort;
@@ -56,7 +59,7 @@ namespace LabelSwitchingRouter
             }
         }
 
-        public LSR(string id = "1")
+        public LSR(string id)
         {
             try
             {
@@ -97,43 +100,62 @@ namespace LabelSwitchingRouter
         }
         private void KeepAlive()
         {
+            Console.WriteLine("Timer started");
             string keepAlive = Keywords.KEEP.ToString() + " " + nodeID.ToString();
             while (true)
             {
-                Thread.Sleep(5000);
+                Thread.Sleep(10000);
+                Console.WriteLine(keepAlive);
                 communicationModule.Send(RCPortNumber, enc.GetBytes(keepAlive));
             }
         }
 
 
-        private byte[] Register()
+        private void Register()
         {
             StringBuilder sb = new StringBuilder();
             sb.Append(Keywords.REGISTER.ToString()).Append(" ").Append(nodeID).Append(" ").
                 Append(portNumber).Append(" ");
             var neighbours = nodesToPorts.Keys;
-            foreach (var item in neighbours)
+            if (neighbours.Count > 0)
             {
-                sb.Append(item).Append("#");
+                foreach (var item in neighbours)
+                {
+                    sb.Append(item).Append("#");
+                }
+                sb.Remove(sb.Length - 1, 1);
             }
-            sb.Remove(sb.Length - 1, 1);
-            Console.WriteLine("Register() method");
-            return enc.GetBytes(sb.ToString());
+            string msg = sb.ToString();
+            Console.WriteLine("Register() method" + msg);
+            communicationModule.Send(RCPortNumber, enc.GetBytes(msg));
         }
+
+        //private void Broadcast()
+        //{
+        //    Random gen = new Random();
+        //    int miliseconds = gen.Next(5, 12) * 1000;
+        //    string msg = Keywords.BROADCAST.ToString() + " " + nodeID + " ";
+        //    byte[] broadcastBytes = enc.GetBytes(msg);
+        //    Thread.Sleep(miliseconds);
+        //    communicationModule.Send(wiresPortNumber, broadcastBytes);
+        //    Thread.Sleep(timeout);
+        //    Register();
+        //    timer.Start(); 
+        //}
 
         private void Broadcast()
         {
             Random gen = new Random();
             int miliseconds = gen.Next(5, 12) * 1000;
-            string msg = Keywords.BROADCAST.ToString() + " " + nodeID + " ";
+            string msg = Keywords.BROADCAST.ToString() + " " + nodeID + " " + ASN;
             byte[] broadcastBytes = enc.GetBytes(msg);
             Thread.Sleep(miliseconds);
-            Console.WriteLine("Broadcast send in next line");
             communicationModule.Send(wiresPortNumber, broadcastBytes);
             Thread.Sleep(timeout);
-            communicationModule.Send(RCPortNumber, Register());
+            Register();
             timer.Start();
         }
+
         public void ServeFIFO()
         {
             while (true)
@@ -184,7 +206,7 @@ namespace LabelSwitchingRouter
         internal void ServeRequest(byte[] command)
         {
             string cmdString = null;
-            string toSend = null;
+            //string toSend = null;
             Keywords keyword = this.DecisionMethod(command, out cmdString);
             Console.WriteLine("Serve: " + keyword.ToString());
             switch (keyword)
@@ -211,11 +233,7 @@ namespace LabelSwitchingRouter
                 default:
                     break;
             }
-            if (toSend != null)
-            {
-                Console.WriteLine("To send: " + toSend);
-                communicationModule.Send(RCPortNumber, enc.GetBytes(toSend));
-            }
+
         }
 
         private void ServeBresp(string cmd)
@@ -235,7 +253,7 @@ namespace LabelSwitchingRouter
                 sb.Append(Keywords.ENEIGHBOUR.ToString()).Append(" ").Append(nodeID).Append(" ").
                     Append(array[2]).Append(" ").Append(array[4]);
             Console.WriteLine("SERVED BRESP, MSG TO RC: " + sb.ToString());
-            communicationModule.Send(wiresPortNumber, enc.GetBytes(sb.ToString()));
+            communicationModule.Send(RCPortNumber, enc.GetBytes(sb.ToString()));
             return;
         }
 
@@ -259,18 +277,42 @@ namespace LabelSwitchingRouter
                 lrm.Reserve(false, Translate(array[1]), int.Parse(array[2]));
         }
 
+        //private void ServeBroadcast(string cmd)
+        //{
+        //    Console.WriteLine("Serving BROADCAST: " + cmd);
+        //    string[] array = cmd.Split(delimiters[0]);
+        //    //array 0 broadcast
+        //    //array 1 nodeid przysyłajacego
+        //    //array 2 port przysylajacego
+        //    //array 3 port tego (przyjmujacego
+        //    StringBuilder sb = new StringBuilder();
+        //    sb.Append(Keywords.BRESP.ToString()).Append(" ").Append(array[3]).Append(" ").Append(nodeID).
+        //        Append(" ").Append(array[2]).Append(" ").Append(ASN);
+        //    communicationModule.Send(wiresPortNumber, enc.GetBytes(sb.ToString()));
+        //    return;
+        //}
+
         private void ServeBroadcast(string cmd)
         {
             Console.WriteLine("Serving BROADCAST: " + cmd);
  	        string[] array = cmd.Split(delimiters[0]);
             //array 0 broadcast
             //array 1 nodeid przysyłajacego
-            //array 2 port przysylajacego
-            //array 3 port tego (przyjmujacego
+            //array 2 ASN
+            //array 3 port tego odbierajacego
+            nodesToPorts.Add(array[1], int.Parse(array[3]));
             StringBuilder sb = new StringBuilder();
-            sb.Append(Keywords.BRESP.ToString()).Append(" ").Append(array[3]).Append(" ").Append(nodeID).
-                Append(" ").Append(array[2]).Append(" ").Append(ASN);
-            communicationModule.Send(wiresPortNumber, enc.GetBytes(sb.ToString()));
+            if (array[2].Equals(ASN.ToString()))
+            {
+                sb.Append(Keywords.NEIGHBOUR.ToString()).Append(" ").Append(nodeID).Append(" ").Append(array[1]);
+            }
+            else
+            {
+                sb.Append(Keywords.ENEIGHBOUR.ToString()).Append(" ").Append(nodeID).Append(" ").
+                    Append(array[1]).Append(" ").Append(array[2]);
+            }
+            Console.WriteLine("SERVED BROADCAST, MSG TO RC: " + sb.ToString());
+            communicationModule.Send(RCPortNumber, enc.GetBytes(sb.ToString()));
             return;
         }
 

@@ -62,6 +62,7 @@ namespace CsharpMPLS
             bool gotLocalPort = false;
             using (StreamReader sr = new StreamReader(configTxt))
             {
+                Console.WriteLine("Poczatek using");
                 while (!sr.EndOfStream)
                 {
                     if (gotWires && gotManager && gotLocalPort)
@@ -71,21 +72,30 @@ namespace CsharpMPLS
                     {
                         array = line.Split(delimiter[0]);
                         if (int.TryParse(array[1], out portNumber))
+                        {
+                            Console.WriteLine("Port: " + portNumber);
                             gotLocalPort = true;
+                        }
                     }//end of if
                     if (line.Contains("#manager"))
                     {
                         line = sr.ReadLine();
                         array = line.Split(delimiter[0]);
                         if (int.TryParse(array[1], out managerPort))
+                        {
+                            Console.WriteLine("RC: " + managerPort);
                             gotManager = true;
+                        }
                     }
                     else if (line.Contains("#wires"))
                     {
                         line = sr.ReadLine();
                         array = line.Split(delimiter[0]);
                         if (int.TryParse(array[1], out wiresPort))
+                        {
+                            Console.WriteLine("Wires: " + wiresPort);
                             gotWires = true;
+                        }
                     }
                     //Console.WriteLine("Manager: {0}, Wires: {1}, LocalPort: {2}", managerPort, wiresPort, portNumber);
                 }

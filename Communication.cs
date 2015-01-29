@@ -34,6 +34,7 @@ namespace CsharpMPLS
         public void Send(int remotePortNumber, byte[] toSend)
         {
             //byte[] toSend = enc.GetBytes(message);
+            Console.WriteLine("To send: " + enc.GetString(toSend) + " to " + remotePortNumber);
             try
             {
                 client.Send(toSend, toSend.Length, "127.0.0.1", remotePortNumber);
@@ -53,7 +54,6 @@ namespace CsharpMPLS
                 while (true)
                 {
                     byte[] receivedBytes = client.Receive(ref remoteIPEndPoint);
-
                     lsr.ServeRequest(receivedBytes);
                 }
             }
