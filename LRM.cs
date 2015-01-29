@@ -1,9 +1,6 @@
 ﻿using LabelSwitchingRouter;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace CsharpMPLS
 {
@@ -11,19 +8,19 @@ namespace CsharpMPLS
     {
         private Dictionary<int, double> neighboursAvB = null;
         private Dictionary<int, double> currentAvB = null;
-        private LSR lsr;
+        
 
-        public LRM(int nodeId, LSR lsr) 
+        public LRM(int nodeId) 
         {
-            this.lsr = lsr;
+
             neighboursAvB = Parser.portsAvB(nodeId);
             currentAvB = neighboursAvB;
             Console.WriteLine("LRM created");
         }
 
-        internal bool Reserve(bool reserve, string nodeId, double bandwith) 
+        internal bool Reserve(bool reserve, int port, double bandwith) 
         {
-            int port = lsr.Translate(nodeId);
+            //int port = lsr.Translate(nodeId);
             if (reserve)
             {
                 double avb;

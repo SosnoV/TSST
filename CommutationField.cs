@@ -1,16 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace LabelSwitchingRouter
 {
     class CommutationField
     {
-        private string space = " ";
+        //private string space = " ";
         private LSR lsr = null;
         private List<LabelSwitchingTableEntry> LabelSwitchingTable = null;
+   
         internal class LabelSwitchingTableEntry 
         {
             public int InInterface;
@@ -61,7 +60,7 @@ namespace LabelSwitchingRouter
                  entry = this.findRow(_packet.ReturnPortNumber(), _packet.GetLabel());
                  _packet.SwapLabel(entry.OutLabel);
                  _packet.SetPortNumber(entry.OutInterface);
-                 Console.WriteLine("DealWithPacket:" + _packet.GetLabel() + "<<<LABEL");
+                 Console.WriteLine("DealWithPacket:" + _packet.ToString());
             }
             catch (Exception e)
             {

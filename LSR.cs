@@ -1,10 +1,7 @@
 ﻿using CsharpMPLS;
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 using System.Threading;
 
 namespace LabelSwitchingRouter
@@ -70,7 +67,7 @@ namespace LabelSwitchingRouter
             }
             nodeID = int.Parse(id);
             CF = new CommutationField(this);
-            lrm = new LRM(nodeID, this);
+            lrm = new LRM(nodeID);
             LSR_FIFO = new Queue<CsharpMPLS.Packet>();
             //neighbours = new List<string>();
             nodesToPorts = new Dictionary<string, int>();
@@ -118,6 +115,7 @@ namespace LabelSwitchingRouter
                 sb.Append(item).Append("#");
             }
             sb.Remove(sb.Length - 1, 1);
+            Console.WriteLine("Register() method");
             return enc.GetBytes(sb.ToString());
         }
 
@@ -126,9 +124,10 @@ namespace LabelSwitchingRouter
             Random gen = new Random();
             int miliseconds = gen.Next(5, 12) * 1000;
             string msg = Keywords.BROADCAST.ToString() + " " + nodeID;
-            byte[] msgBytes = enc.GetBytes(msg);
+            byte[] broadcastBytes = enc.GetBytes(msg);
             Thread.Sleep(miliseconds);
-            communicationModule.Send(wiresPortNumber, msgBytes);
+            Console.WriteLine("Broadcast send in next line");
+            communicationModule.Send(wiresPortNumber, broadcastBytes);
             Thread.Sleep(timeout);
             communicationModule.Send(RCPortNumber, Register());
             timer.Start();
@@ -219,6 +218,7 @@ namespace LabelSwitchingRouter
 
         private void ServeBresp(string cmd)
         {
+            Console.WriteLine("Serving BRESP: " + cmd);
             string[] array = cmd.Split(delimiters[0]);
             //array 0 bresp
             //array 1 port przysyłajacego
@@ -233,12 +233,13 @@ namespace LabelSwitchingRouter
 
         private void ServeReserve(string cmd)
         {
+            Console.WriteLine("Serving RESERVE: " + cmd);
             string[] array = cmd.Split(delimiters[0]);
             if (bool.Parse(array[3]))
             {
                 string message = Keywords.CCRESPONSE.ToString() + " " + nodeID + " ";
                 // string message = Keywords.CCRESPONSE.ToString() + " " + array[1] + " ";
-                if (lrm.Reserve(true, array[1], double.Parse(array[2])))
+                if (lrm.Reserve(true, Translate(array[1]), double.Parse(array[2])))
                 {
                     message += "YES";
                 }
@@ -247,11 +248,12 @@ namespace LabelSwitchingRouter
                 communicationModule.Send(RCPortNumber, enc.GetBytes(message));
             }
             else
-                lrm.Reserve(false, array[1], int.Parse(array[2]));
+                lrm.Reserve(false, Translate(array[1]), int.Parse(array[2]));
         }
 
         private void ServeBroadcast(string cmd)
         {
+            Console.WriteLine("Serving BROADCAST: " + cmd);
  	        string[] array = cmd.Split(delimiters[0]);
             //array 0 broadcast
             //array 1 nodeid przysyłajacego
@@ -260,12 +262,13 @@ namespace LabelSwitchingRouter
             StringBuilder sb = new StringBuilder();
             sb.Append(Keywords.BRESP.ToString()).Append(" ").Append(array[3]).Append(" ").Append(nodeID).
                 Append(" ").Append(array[2]);
-            communicationModule.Send(RCPortNumber, enc.GetBytes(sb.ToString()));
+            communicationModule.Send(wiresPortNumber, enc.GetBytes(sb.ToString()));
             return;
         }
 
         internal void ServeSetRequest(string cmd)
         {
+            Console.WriteLine("Serving SET: " + cmd);
             string[] array = cmd.Split(delimiters[0]);
             if (CF.addInputEntryToInputTable(Translate(array[1]), array[2],
                 Translate(array[3]), array[4]))
@@ -283,6 +286,7 @@ namespace LabelSwitchingRouter
 
         internal void ServeDeleteRequest(string cmd)
         {
+            Console.WriteLine("Serving DELETE: " + cmd);
             string[] array = cmd.Split(delimiters[0]);
             if (CF.deleteInEntry(Translate(array[1]), array[2]))
             {
