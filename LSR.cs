@@ -15,8 +15,7 @@ namespace LabelSwitchingRouter
         internal int wiresPortNumber { get; private set; }
         internal int RCPortNumber { get; private set; }
         internal int nodeID { get; private set; }
-        private int a;
-        private int timeout = 15000;
+        private int timeout = 20000;
         internal CommutationField CF = null;
         internal LRM lrm = null;
         internal Queue<Packet> LSR_FIFO = null;
@@ -26,29 +25,39 @@ namespace LabelSwitchingRouter
         private Thread servingFIFO;
         private Thread timer;
         private Thread broadcast;
-        private List<string> neighbours = null;
+        //private List<string> neighbours = null;
+        private Dictionary<string, int> nodesToPorts = null;
 
-
+        /// <summary>
+        /// Maps NodeId to Port connected with that node
+        /// </summary>
+        /// <param name="nodeId"></param>
+        /// <returns></returns>
+        internal int Translate(string nodeId) 
+        {
+            int port = 0;
+            nodesToPorts.TryGetValue(nodeId, out port);
+            return port;
+        }
 
         private bool loadLSRConfiguration(string nID = "0")
         {
             //portNumber = CsharpMPLS.Parser.ParseLSRConfiguration(nID);
             //if(portNumber == 0)
             //    return false;
-            int managerPort = 0, wiresPort = 0, avb = 0;
-            portNumber = Parser.ParseConfiguration(nID, out managerPort, out wiresPort, out avb);
+            int managerPort = 0, wiresPort = 0;
+            portNumber = Parser.ParseConfiguration(nID, out managerPort, out wiresPort);
             if (managerPort == 0 || wiresPort == 0 || portNumber == 0)
                 return false;
             else
             {
                 RCPortNumber = managerPort;
                 wiresPortNumber = wiresPort;
-                a = avb;
                 return true;
             }
         }
 
-        public LSR(string id = "0")
+        public LSR(string id = "1")
         {
             try
             {
@@ -61,9 +70,10 @@ namespace LabelSwitchingRouter
             }
             nodeID = int.Parse(id);
             CF = new CommutationField(this);
-            lrm = new LRM(a);
+            lrm = new LRM(nodeID, this);
             LSR_FIFO = new Queue<CsharpMPLS.Packet>();
-            neighbours = new List<string>();
+            //neighbours = new List<string>();
+            nodesToPorts = new Dictionary<string, int>();
             communicationModule = new Communication(portNumber, this);
             Console.WriteLine("/////////////// LSR NODE NUMBER: " + nodeID + "///////////////");
         }
@@ -102,6 +112,7 @@ namespace LabelSwitchingRouter
             StringBuilder sb = new StringBuilder();
             sb.Append(Keywords.REGISTER.ToString()).Append(" ").Append(nodeID).Append(" ").
                 Append(portNumber).Append(" ");
+            var neighbours = nodesToPorts.Keys;
             foreach (var item in neighbours)
             {
                 sb.Append(item).Append("#");
@@ -157,6 +168,8 @@ namespace LabelSwitchingRouter
                 return Keywords.PACKET;
             else if (cmdString.Contains(Keywords.BROADCAST.ToString()))
                 return Keywords.BROADCAST;
+            else if (cmdString.Contains(Keywords.BRESP.ToString()))
+                return Keywords.BRESP;
             else if (cmdString.Contains(Keywords.RESERVE.ToString()))
                 return Keywords.RESERVE;
             else if (cmdString.Contains(Keywords.SET.ToString()))
@@ -188,6 +201,9 @@ namespace LabelSwitchingRouter
                 case Keywords.BROADCAST:
                     ServeBroadcast(cmdString);
                     break;
+                case Keywords.BRESP:
+                    ServeBresp(cmdString);
+                    break;
                 case Keywords.RESERVE:
                     ServeReserve(cmdString);
                     break;
@@ -201,6 +217,20 @@ namespace LabelSwitchingRouter
             }
         }
 
+        private void ServeBresp(string cmd)
+        {
+            string[] array = cmd.Split(delimiters[0]);
+            //array 0 bresp
+            //array 1 port przysyłajacego
+            //array 2 nodeId sąsiada
+            //array 3 port do tego sasiada
+            nodesToPorts.Add(array[2], int.Parse(array[3]));
+            StringBuilder sb = new StringBuilder();
+            sb.Append(Keywords.NEIGHBOUR.ToString()).Append(" ").Append(nodeID).Append(" ").Append(array[2]);
+            communicationModule.Send(RCPortNumber, enc.GetBytes(sb.ToString()));
+            return;
+        }
+
         private void ServeReserve(string cmd)
         {
             string[] array = cmd.Split(delimiters[0]);
@@ -208,7 +238,7 @@ namespace LabelSwitchingRouter
             {
                 string message = Keywords.CCRESPONSE.ToString() + " " + nodeID + " ";
                 // string message = Keywords.CCRESPONSE.ToString() + " " + array[1] + " ";
-                if (lrm.Reserve(true, array[1], int.Parse(array[2])))
+                if (lrm.Reserve(true, array[1], double.Parse(array[2])))
                 {
                     message += "YES";
                 }
@@ -223,20 +253,13 @@ namespace LabelSwitchingRouter
         private void ServeBroadcast(string cmd)
         {
  	        string[] array = cmd.Split(delimiters[0]);
-            foreach (var neigh in neighbours)
-	        {
-		        if(array[1].Equals(neigh))
-                    return;
-	        }
-            neighbours.Add(array[1]);
-            lrm.AddNeighbourAVB(array[1]);
+            //array 0 broadcast
+            //array 1 nodeid przysyłajacego
+            //array 2 port przysylajacego
+            //array 3 port tego (przyjmujacego
             StringBuilder sb = new StringBuilder();
-            sb.Append(Keywords.NEIGHBOUR.ToString()).Append(" ").Append(array[1]);
-            //foreach (var item in neighbours)
-            //{
-            //    sb.Append(item).Append("#");
-            //}
-            //sb.Remove(sb.Length-1, 1);
+            sb.Append(Keywords.BRESP.ToString()).Append(" ").Append(array[3]).Append(" ").Append(nodeID).
+                Append(" ").Append(array[2]);
             communicationModule.Send(RCPortNumber, enc.GetBytes(sb.ToString()));
             return;
         }
@@ -244,7 +267,8 @@ namespace LabelSwitchingRouter
         internal void ServeSetRequest(string cmd)
         {
             string[] array = cmd.Split(delimiters[0]);
-            if (CF.addInputEntryToInputTable(int.Parse(array[1]), array[2], int.Parse(array[3]), array[4]))
+            if (CF.addInputEntryToInputTable(Translate(array[1]), array[2],
+                Translate(array[3]), array[4]))
             {
                 Console.WriteLine("SET obsłużone pomyślnie");
             }
@@ -260,7 +284,7 @@ namespace LabelSwitchingRouter
         internal void ServeDeleteRequest(string cmd)
         {
             string[] array = cmd.Split(delimiters[0]);
-            if (CF.deleteInEntry(int.Parse(array[1]), array[2]))
+            if (CF.deleteInEntry(Translate(array[1]), array[2]))
             {
                 Console.WriteLine("DELETE obsłużone pomyślnie");
             }
@@ -284,6 +308,7 @@ namespace LabelSwitchingRouter
         public enum Keywords
         {
             BROADCAST,
+            BRESP,
             NEIGHBOUR,
             RESERVE,
             PACKET,

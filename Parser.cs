@@ -13,12 +13,49 @@ namespace CsharpMPLS
         private static string configTxt = "config.txt";
         private static char[] delimiter = {'=', ' '};
 
-        internal static int ParseConfiguration(string nID, out int managerPort, out int wiresPort, out int AvB)
+        internal static Dictionary<int, double> portsAvB(int nodeId) 
+        {
+            string line;
+            string[] data = null;
+            int numberOfWires = 0;
+            Dictionary<int, double> dic = new Dictionary<int, double>();
+            StreamReader file = new System.IO.StreamReader(configTxt);
+            while ((line = file.ReadLine()) != null)
+            {
+                if (String.Compare("number_of_wires", 0, line, 0, 15, StringComparison.OrdinalIgnoreCase) == 0)
+                {
+                    data = line.Split('=');
+                    numberOfWires = Int32.Parse(data[1]);
+                    data = null;
+                }
+                else if (numberOfWires > 0)
+                {
+                    if (line.Contains(',') && !line.Contains('#'))
+                    {
+                        data = line.Split(',');
+                        if (int.Parse(data[0]) == nodeId)
+                        {
+                            dic.Add(int.Parse(data[1]), double.Parse(data[4]));
+                        }
+                        else if (int.Parse(data[2]) == nodeId)
+                        {
+                            dic.Add(int.Parse(data[3]), double.Parse(data[4]));
+                        }
+                        numberOfWires--;
+                        data = null;
+                    }
+                }
+
+            }
+            file.Close();
+            return dic;
+        }
+
+        internal static int ParseConfiguration(string nID, out int managerPort, out int wiresPort)
         {
             string id = "Node" + nID;
             string line = null;
             int portNumber = 0;
-            AvB = 0;
             string[] array = null;
             managerPort = 0;
             wiresPort = 0;
@@ -34,10 +71,8 @@ namespace CsharpMPLS
                     line = sr.ReadLine();
                     if (line.Contains(id))
                     {
-                        string[] lineSplit = line.Split(delimiter[1]); //split po spacji
-                        array = lineSplit[1].Split(delimiter[0]); //split by dostac port number
-                        lineSplit = lineSplit[2].Split(delimiter[0]); // spkit by dostac AvB
-                        if (int.TryParse(array[1], out portNumber) && int.TryParse(lineSplit[1], out AvB))
+                        array = line.Split(delimiter[0]);
+                        if (int.TryParse(array[1], out portNumber))
                             gotLocalPort = true;
                     }//end of if
                     if (line.Contains("#manager"))
@@ -68,8 +103,7 @@ namespace CsharpMPLS
                 Console.WriteLine("Error getting manager,wires,local ports");
             }
 
-            return portNumber; 
-        
+            return portNumber;
         }
     }
 }

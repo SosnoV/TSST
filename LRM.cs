@@ -1,4 +1,5 @@
-﻿using System;
+﻿using LabelSwitchingRouter;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -8,51 +9,57 @@ namespace CsharpMPLS
 {
     class LRM
     {
-        private int AvB;
-        private Dictionary<string, int> neighboursAvB;
+        private Dictionary<int, double> neighboursAvB = null;
+        private Dictionary<int, double> currentAvB = null;
+        private LSR lsr;
 
-        public LRM(int avb) 
+        public LRM(int nodeId, LSR lsr) 
         {
-            AvB = avb;
-            neighboursAvB = new Dictionary<string, int>();
+            this.lsr = lsr;
+            neighboursAvB = Parser.portsAvB(nodeId);
+            currentAvB = neighboursAvB;
+            Console.WriteLine("LRM created");
         }
 
-        internal bool Reserve(bool reserve, string nodeId, int bandwith) 
+        internal bool Reserve(bool reserve, string nodeId, double bandwith) 
         {
+            int port = lsr.Translate(nodeId);
             if (reserve)
             {
-                int avb;
-                neighboursAvB.TryGetValue(nodeId, out avb);
+                double avb;
+                currentAvB.TryGetValue(port, out avb);
                 if (avb < bandwith)
                     return false;
                 avb -= bandwith;
-                neighboursAvB.Remove(nodeId);
-                neighboursAvB.Add(nodeId, avb);
+                currentAvB.Remove(port);
+                currentAvB.Add(port, avb);
                 return true;
             }
             else 
             {
-                int avb;
-                neighboursAvB.TryGetValue(nodeId, out avb);
+                double avb;
+                double AvB; //maksymalne AvB
+                currentAvB.TryGetValue(port, out avb);
+                neighboursAvB.TryGetValue(port, out AvB);
                 avb += bandwith;
                 if (avb > AvB)
                     avb = AvB;
-                neighboursAvB.Remove(nodeId);
-                neighboursAvB.Add(nodeId, avb);
+                currentAvB.Remove(port);
+                currentAvB.Add(port, avb);
                 return true; 
             }
         }
         
-        internal void AddNeighbourAVB(string nodeId) 
-        {
-            neighboursAvB.Add(nodeId, AvB);
-            return;
-        }
+        //internal void AddNeighbourAVB(string nodeId) 
+        //{
+        //    neighboursAvB.Add(nodeId, AvB);
+        //    return;
+        //}
 
-        internal void RemoveNeighbourAVB(string nodeId)
-        {
-            neighboursAvB.Remove(nodeId);
-            return;
-        }
+        //internal void RemoveNeighbourAVB(string nodeId)
+        //{
+        //    neighboursAvB.Remove(nodeId);
+        //    return;
+        //}
     }
 }
