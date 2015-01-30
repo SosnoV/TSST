@@ -25,6 +25,7 @@ namespace LabelSwitchingRouter
         private Thread broadcast;
         //private List<string> neighbours = null;
         private Dictionary<string, int> nodesToPorts = null;
+        private bool registered = false;
 
         /// <summary>
         /// Maps NodeId to Port connected with that node
@@ -153,6 +154,7 @@ namespace LabelSwitchingRouter
             communicationModule.Send(wiresPortNumber, broadcastBytes);
             Thread.Sleep(timeout);
             Register();
+            registered = true;
             timer.Start();
         }
 
@@ -199,6 +201,8 @@ namespace LabelSwitchingRouter
                 return Keywords.SET;
             else if (cmdString.Contains(Keywords.DELETE.ToString()))
                 return Keywords.DELETE;
+            else if (cmdString.Contains(Keywords.YELL.ToString()))
+                return Keywords.YELL;
             else
                 return Keywords.DEFAULT;
         }
@@ -230,10 +234,24 @@ namespace LabelSwitchingRouter
                 case Keywords.RESERVE:
                     ServeReserve(cmdString);
                     break;
+                case Keywords.YELL:
+                    ServeYell();
+                    break;
                 default:
                     break;
             }
 
+        }
+
+        private void ServeYell()
+        {
+            Random gen = new Random();
+            int miliseconds = gen.Next(1, 5) * 1000;
+            string msg = Keywords.BROADCAST.ToString() + " " + nodeID + " " + ASN;
+            byte[] broadcastBytes = enc.GetBytes(msg);
+            Thread.Sleep(miliseconds);
+            communicationModule.Send(wiresPortNumber, broadcastBytes);
+            return;
         }
 
         private void ServeBresp(string cmd)
@@ -270,11 +288,18 @@ namespace LabelSwitchingRouter
                     message += "YES";
                 }
                 else
+                {
                     message += "NO";
+                }
                 communicationModule.Send(RCPortNumber, enc.GetBytes(message));
             }
             else
-                lrm.Reserve(false, Translate(array[1]), int.Parse(array[2]));
+            {
+                if (lrm.Reserve(false, Translate(array[1]), int.Parse(array[2])))
+                    Console.WriteLine("DISRESERVE DONE");
+                else
+                    Console.WriteLine("DISRESERVE UPS");
+            }
         }
 
         //private void ServeBroadcast(string cmd)
@@ -300,9 +325,19 @@ namespace LabelSwitchingRouter
             //array 1 nodeid przysyłajacego
             //array 2 ASN
             //array 3 port tego odbierajacego
-            nodesToPorts.Add(array[1], int.Parse(array[3]));
+            try
+            {
+                nodesToPorts.Add(array[1], int.Parse(array[3]));
+            }
+            catch (ArgumentException) 
+            {
+                return;
+            }
+            if (!registered)
+                return;
             StringBuilder sb = new StringBuilder();
-            if (array[2].Equals(ASN.ToString()))
+            int asn = int.Parse(array[2]);
+            if (asn == ASN || asn == 0)
             {
                 sb.Append(Keywords.NEIGHBOUR.ToString()).Append(" ").Append(nodeID).Append(" ").Append(array[1]);
             }
@@ -361,6 +396,7 @@ namespace LabelSwitchingRouter
     }
         public enum Keywords
         {
+            YELL,
             BROADCAST,
             BRESP,
             NEIGHBOUR,
