@@ -24,7 +24,7 @@ namespace LabelSwitchingRouter
         private Thread timer;
         private Thread broadcast;
         //private List<string> neighbours = null;
-        private Dictionary<string, int> nodesToPorts = null;
+        //private Dictionary<string, int> nodesToPorts = null;
         private bool registered = false;
 
         /// <summary>
@@ -35,7 +35,7 @@ namespace LabelSwitchingRouter
         internal int Translate(string nodeId) 
         {
             int port = 0;
-            nodesToPorts.TryGetValue(nodeId, out port);
+            lrm.nodesToPorts.TryGetValue(nodeId, out port);
             return port;
         }
 
@@ -76,7 +76,7 @@ namespace LabelSwitchingRouter
             lrm = new LRM(nodeID);
             LSR_FIFO = new Queue<CsharpMPLS.Packet>();
             //neighbours = new List<string>();
-            nodesToPorts = new Dictionary<string, int>();
+            //nodesToPorts = new Dictionary<string, int>();
             communicationModule = new Communication(portNumber, this);
             Console.WriteLine("/////////////// LSR NODE NUMBER: " + nodeID + "///////////////");
         }
@@ -117,7 +117,7 @@ namespace LabelSwitchingRouter
             StringBuilder sb = new StringBuilder();
             sb.Append(Keywords.REGISTER.ToString()).Append(" ").Append(nodeID).Append(" ").
                 Append(portNumber).Append(" ");
-            var neighbours = nodesToPorts.Keys;
+            var neighbours = lrm.nodesToPorts.Keys;
             if (neighbours.Count > 0)
             {
                 foreach (var item in neighbours)
@@ -197,6 +197,8 @@ namespace LabelSwitchingRouter
                 return Keywords.BRESP;
             else if (cmdString.Contains(Keywords.RESERVE.ToString()))
                 return Keywords.RESERVE;
+            else if (cmdString.Contains(Keywords.DISRESERVE.ToString()))
+                return Keywords.DISRESERVE;
             else if (cmdString.Contains(Keywords.SET.ToString()))
                 return Keywords.SET;
             else if (cmdString.Contains(Keywords.DELETE.ToString()))
@@ -228,8 +230,11 @@ namespace LabelSwitchingRouter
                 case Keywords.BROADCAST:
                     ServeBroadcast(cmdString);
                     break;
-                case Keywords.BRESP:
-                    ServeBresp(cmdString);
+                //case Keywords.BRESP:
+                //    ServeBresp(cmdString);
+                //    break;
+                case Keywords.DISRESERVE:
+                    ServeDisreserve(cmdString);
                     break;
                 case Keywords.RESERVE:
                     ServeReserve(cmdString);
@@ -254,53 +259,73 @@ namespace LabelSwitchingRouter
             return;
         }
 
-        private void ServeBresp(string cmd)
-        {
-            Console.WriteLine("Serving BRESP: " + cmd);
-            string[] array = cmd.Split(delimiters[0]);
-            //array 0 bresp
-            //array 1 port przysyłajacego
-            //array 2 nodeId sąsiada
-            //array 3 port do tego sasiada
-            //array 4 ASN sąsiada
-            nodesToPorts.Add(array[2], int.Parse(array[3]));
-            StringBuilder sb = new StringBuilder();
-            if(array[4].Equals(ASN.ToString()))
-                sb.Append(Keywords.NEIGHBOUR.ToString()).Append(" ").Append(nodeID).Append(" ").Append(array[2]);
-            else
-                sb.Append(Keywords.ENEIGHBOUR.ToString()).Append(" ").Append(nodeID).Append(" ").
-                    Append(array[2]).Append(" ").Append(array[4]);
-            Console.WriteLine("SERVED BRESP, MSG TO RC: " + sb.ToString());
-            communicationModule.Send(RCPortNumber, enc.GetBytes(sb.ToString()));
-            return;
-        }
-
         private void ServeReserve(string cmd)
         {
             Console.WriteLine("Serving RESERVE: " + cmd);
             string[] array = cmd.Split(delimiters[0]);
-            if (bool.Parse(array[3]))
-            {
-                string message = Keywords.CCRESPONSE.ToString() + " " + nodeID + " ";
-                // string message = Keywords.CCRESPONSE.ToString() + " " + array[1] + " ";
-                if (lrm.Reserve(true, Translate(array[1]), double.Parse(array[2])))
-                {
-                    message += "YES";
-                }
-                else
-                {
-                    message += "NO";
-                }
-                communicationModule.Send(RCPortNumber, enc.GetBytes(message));
-            }
-            else
-            {
-                if (lrm.Reserve(false, Translate(array[1]), int.Parse(array[2])))
-                    Console.WriteLine("DISRESERVE DONE");
-                else
-                    Console.WriteLine("DISRESERVE UPS");
-            }
+            string label = lrm.Reserve(array[1], Translate(array[1]), double.Parse(array[2]), array[3]);
+            StringBuilder sb = new StringBuilder();
+            sb.Append(Keywords.RESPONSE.ToString()).Append(" ").Append(nodeID).Append(" ").Append(array[3]).
+                Append(" ").Append(label);
+            communicationModule.Send(RCPortNumber, enc.GetBytes(sb.ToString()));
+            return;
         }
+
+        private void ServeDisreserve(string cmd)
+        {
+            Console.WriteLine("Serving DISRESERVE: " + cmd);
+            string[] array = cmd.Split(delimiters[0]);
+            lrm.Disreserve(array[1]);
+            return;
+        }
+
+        //private void ServeBresp(string cmd)
+        //{
+        //    Console.WriteLine("Serving BRESP: " + cmd);
+        //    string[] array = cmd.Split(delimiters[0]);
+        //    //array 0 bresp
+        //    //array 1 port przysyłajacego
+        //    //array 2 nodeId sąsiada
+        //    //array 3 port do tego sasiada
+        //    //array 4 ASN sąsiada
+        //    nodesToPorts.Add(array[2], int.Parse(array[3]));
+        //    StringBuilder sb = new StringBuilder();
+        //    if(array[4].Equals(ASN.ToString()))
+        //        sb.Append(Keywords.NEIGHBOUR.ToString()).Append(" ").Append(nodeID).Append(" ").Append(array[2]);
+        //    else
+        //        sb.Append(Keywords.ENEIGHBOUR.ToString()).Append(" ").Append(nodeID).Append(" ").
+        //            Append(array[2]).Append(" ").Append(array[4]);
+        //    Console.WriteLine("SERVED BRESP, MSG TO RC: " + sb.ToString());
+        //    communicationModule.Send(RCPortNumber, enc.GetBytes(sb.ToString()));
+        //    return;
+        //}
+
+        //private void ServeReserve(string cmd)
+        //{
+        //    Console.WriteLine("Serving RESERVE: " + cmd);
+        //    string[] array = cmd.Split(delimiters[0]);
+        //    if (bool.Parse(array[3]))
+        //    {
+        //        string message = Keywords.CCRESPONSE.ToString() + " " + nodeID + " ";
+        //        // string message = Keywords.CCRESPONSE.ToString() + " " + array[1] + " ";
+        //        if (lrm.Reserve(true, Translate(array[1]), double.Parse(array[2])))
+        //        {
+        //            message += "YES";
+        //        }
+        //        else
+        //        {
+        //            message += "NO";
+        //        }
+        //        communicationModule.Send(RCPortNumber, enc.GetBytes(message));
+        //    }
+        //    else
+        //    {
+        //        if (lrm.Reserve(false, Translate(array[1]), int.Parse(array[2])))
+        //            Console.WriteLine("DISRESERVE DONE");
+        //        else
+        //            Console.WriteLine("DISRESERVE UPS");
+        //    }
+        //}
 
         //private void ServeBroadcast(string cmd)
         //{
@@ -327,7 +352,7 @@ namespace LabelSwitchingRouter
             //array 3 port tego odbierajacego
             try
             {
-                nodesToPorts.Add(array[1], int.Parse(array[3]));
+                lrm.nodesToPorts.Add(array[1], int.Parse(array[3]));
             }
             catch (ArgumentException) 
             {
@@ -402,6 +427,7 @@ namespace LabelSwitchingRouter
             NEIGHBOUR,
             ENEIGHBOUR,
             RESERVE,
+            DISRESERVE,
             PACKET,
             SET,
             DELETE,
